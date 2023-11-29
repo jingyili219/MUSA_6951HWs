@@ -1,0 +1,84 @@
+---
+title: "Population map"
+author: "Jingyi Li"
+date: "2023-11-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidycensus)
+library(sf)
+library(ggplot2)
+library(RColorBrewer)
+```
+
+## Data
+
+```{r cars}
+arizonaCounty<-st_read("https://services1.arcgis.com/mpVYz37anSdrK4d8/arcgis/rest/services/Arizona_County_Boundary/FeatureServer/1/query?outFields=*&where=1%3D1&f=geojson")%>%st_drop_geometry()
+AZtracts20 <- 
+  get_acs(geography = "county",
+          variables = c("B25026_001E"), 
+          year=2020, state=04, geometry=TRUE) %>% 
+  st_transform('EPSG:4326')%>%
+  dplyr::select( -NAME, -moe) %>%
+  spread(key = variable, value = estimate) %>%
+  rename(TotalPop = B25026_001)
+area<-read.csv("county-area.csv")
+AZpop$TotalPop <- as.numeric(AZpop$TotalPop)
+area$Area.Sq.mi. <- as.numeric(area$Area.Sq.mi.)
+AZpop<-merge(AZtracts20,arizonaCounty,by="GEOID")
+popdensity<-merge(AZpop,area,by="NAME")%>%
+  mutate(Popdensity=TotalPop/Area.Sq.mi.)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+theme_pop<-function(){
+  font<-"Times New Roman"
+  theme_minimal()%+replace%
+theme(
+  panel.grid.major = element_blank(),
+  panel.grid.minor= element_blank(),
+  axis.ticks=element_blank(),
+  axis.line.x = element_line(),
+  axis.line.y = element_line(),
+  plot.title = element_text(
+    family= font,
+    size=25,
+    face="bold",
+    hjust=0,
+    vjust=2,
+    color="black"),
+  plot.subtitle = element_text(
+    family=font,
+    size=18,
+    hjust=0,
+    vjust=2,
+    color="black"),
+  plot.caption=element_text(
+    family=font,
+    size=9,
+    hjust=1,
+    vjust=-0.5),
+  axis.text = element_blank(),
+  axis.text.y=element_blank(),
+  axis.text.x = element_blank(),
+  axis.title=element_blank(),
+  axis.line.x.bottom =element_blank(),
+  axis.line.y.left =element_blank()
+)}
+pop<-ggplot(popdensity) +
+  geom_sf(aes(fill = (Popdensity))) +
+  scale_fill_gradient(name = "Popdensity",low = "lightyellow", high = "darkgreen") +
+  labs(title = "Population by Counties in Arizona", subtitle = "Maricopa has exceedingly high population density", caption="Source:ArcGIS Open Data\n American Census Bureau") +
+  geom_sf_text(aes(label = NAME), color = "black", size = 2, check_overlap = TRUE)+
+  theme_pop()
+ggsave("population map.jpg",pop,width=12,height=9)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the 

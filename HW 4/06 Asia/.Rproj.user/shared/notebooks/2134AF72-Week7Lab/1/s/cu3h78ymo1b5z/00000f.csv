@@ -1,0 +1,5 @@
+"0","tm_shape(hennepin_black) + "
+"0","  tm_polygons(fill = ""percent"", fill.scale = tm_scale_categorical())+"
+"0","tm_shape(hennepin_black) +"
+"0","  tm_borders(""ivory"", lwd = 0.5)"
+"2","Warning: Number of levels of the variable assigned to the aesthetic ""fill"" of the layer ""polygons"" is 329, which is larger than n.max (which is 30), so levels are combined."

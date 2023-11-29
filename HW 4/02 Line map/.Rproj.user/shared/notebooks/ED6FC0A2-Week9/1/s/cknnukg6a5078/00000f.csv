@@ -1,0 +1,18 @@
+"0","library(tmap)"
+"2","
+Attaching package: ‘tmap’
+
+"
+"2","The following object is masked from ‘package:datasets’:
+
+    rivers
+
+"
+"0","tmap_mode(""view"")"
+"2","tmap mode set to 'view'
+"
+"0","tm_shape(dallas_bachelors) + "
+"0","  tm_polygons(fill = ""estimate"", palette = ""magma"","
+"0","          alpha = 0.5)"
+"2","Deprecated tmap v3 code detected. Code translated to v4
+"

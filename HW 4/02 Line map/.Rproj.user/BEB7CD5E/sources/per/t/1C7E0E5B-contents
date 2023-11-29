@@ -1,0 +1,71 @@
+---
+title: "Line map"
+author: "Jingyi Li"
+date: "2023-11-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(sf)
+library(ggplot2)
+library(mapsf)
+```
+
+## Data
+```{r }
+boundary <- st_read("C:/Users/Jingyi's lenovo/Desktop/Penn/Fall 2023/MUSA 6951/HW 4 30 Days Mapping Challenge/02 Line map/grca_tracts/GRCA_boundary.shp")
+trail <- st_read("C:/Users/Jingyi's lenovo/Desktop/Penn/Fall 2023/MUSA 6951/HW 4 30 Days Mapping Challenge/02 Line map/GRCA_TRANS_Trail_ln/GRCA_TRANS_Trail_ln.shp")
+trail <- st_zm(trail, drop = TRUE)
+MostPopularTrail<-trail%>%filter(TrailName=="Bright Angel")
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+theme_GC <- function() {
+  font <- "Times New Roman"
+  theme_minimal() %+replace%
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.ticks = element_blank(),
+      plot.title = element_text(
+        family = font,
+        size = 20,
+        face = "bold",
+        hjust = 0,
+        vjust = 2,
+        color = "black"),
+      plot.subtitle = element_text(
+        family = font,
+        size = 14,
+        hjust = 0,
+        vjust = 2,
+        color = "red"),
+      plot.caption = element_text(
+        family = font,
+        size = 9,
+        hjust = 1,
+        vjust = -0.5),
+      axis.text = element_blank(),
+      axis.text.x = element_blank(),
+      axis.text.y = element_blank(),
+      axis.title = element_blank()
+    )}
+
+GCTrails <- ggplot() +
+  geom_sf(data = boundary, fill = "lightgrey", color = "black") +
+  geom_sf(data = trail, color = "darkgrey") +
+  geom_sf(data = MostPopularTrail, color = "red", linewidth = 1) +
+  labs(
+    title = "Grand Canyon National Park Trails",
+    subtitle = "Bright Angel is the most popular trail",
+    caption = "Source: NPS") +
+  theme_GC()
+GCTrails
+ggsave("GrandCanyonTrails.jpeg", plot = GCTrails, width = 10, height = 8, units = "in", dpi = 300)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,14 @@
+"0","tm <- tm_shape(joined_data)"
+"0","tm + "
+"0","  tm_fill(""estimate"", palette = ""Blues"", title=""Median Household Income"")+"
+"0","  tm_borders(col = 'white')+"
+"0","  tm_text(""Abbr"", size = 0.8, col = ""black"", bg.color = ""transparent"")+"
+"0","  tm_layout(frame = FALSE, legend.frame = FALSE)+"
+"0","  tm_title(""Median Household Income by State"")+"
+"0","  tmap_mode(""plot"")"
+"2","Deprecated tmap v3 code detected. Code translated to v4
+"
+"2","Deprecated tmap v3 code detected. Code translated to v4
+"
+"2","tmap mode set to 'plot'
+"

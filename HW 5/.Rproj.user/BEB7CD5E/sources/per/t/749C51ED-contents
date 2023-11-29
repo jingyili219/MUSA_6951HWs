@@ -1,0 +1,105 @@
+---
+title: "MUSA 6951 HW5"
+author: "Jingyi Li"
+date: "2023-11-12"
+output: html_document
+---
+
+```{r setup}
+my_packages <- c("tidyverse", "broom", "coefplot", "cowplot",
+                 "gapminder", "GGally", "ggrepel", "ggridges", "gridExtra",
+                 "here", "interplot", "margins", "maps", "mapproj",
+                 "mapdata", "MASS", "quantreg", "rlang", "scales",
+                 "survey", "srvyr", "viridis", "viridisLite", "devtools")
+install.packages(my_packages,repo="http://cran.rstudio.com")
+devtools::install_github("kjhealy/socviz")
+install.packages("patchwork")
+library(tidyverse)
+library(tidycensus)
+library(sf)
+library(patchwork)
+library(grid)
+library(gridExtra)
+library(gridtext)
+library(ggtext)
+```
+
+## Audience Identification
+
+
+## Data Selection and Preparation
+
+```{r pressure, echo=FALSE}
+TChange<-read.csv("Tucson.csv")
+TModified<- TChange[TChange$Year %% 5 == 0, ]
+Before75 <-subset(TModified, Year <= 1975)
+After75<-filter(TModified,Year>=1975)
+Lastyear<-filter(TModified,Year==2020)
+AvgBefore75<-mean(Before75$Avg.Temp)
+AvgAfter75<-mean(After75$Avg.Temp)
+AvgYearBefore75<-mean(Before75$Year)
+AvgYearAfter75<-mean(After75$Year)
+```
+
+## Data Visualization
+
+```{r}
+theme_Tucson<-function(){
+  font<-"Times New Roman"
+  theme_minimal()%+replace%
+theme(
+  panel.grid.major = element_line(),
+  panel.grid.minor= element_blank(),
+  axis.ticks=element_blank(),
+  axis.line.x = element_line(),
+  axis.line.y = element_line(),
+  plot.title = element_text(
+    family= font,
+    size=25,
+    face="bold",
+    hjust=0,
+    vjust=2,
+    color="black"),
+  plot.subtitle = element_text(
+    family=font,
+    size=18,
+    hjust=0,
+    vjust=2,
+    color="black"),
+  plot.caption=element_text(
+    family=font,
+    size=9,
+    hjust=1,
+    vjust=-0.5),
+  axis.text = element_text(
+    family=font,
+    size=10),
+  axis.text.y=element_text(
+    family=font,
+    size=9,
+    margin = margin(r=5)),
+  axis.text.x = element_text(
+    margin = margin(l=5,b=10)
+  )
+)}
+
+TC <- ggplot()+
+  geom_point(aes(x = Year,y=Avg.Temp),size = 4,data = Before75,color="grey")+
+  geom_point(aes(x = Year,y=Avg.Temp),size = 4,data = After75,color="grey")+
+  geom_point(aes(x = AvgYearBefore75,y=AvgBefore75),size=4,color="blue") + 
+  geom_label(aes(x = AvgYearBefore75, y = AvgBefore75), label = "AVG=67.25", hjust = 0.9,vjust=-1, label.size = 0)+
+  geom_point(aes(x = AvgYearAfter75,y=AvgAfter75),size=4,color="darkred") + 
+  geom_label(aes(x = AvgYearAfter75, y = AvgAfter75), label = "AVG=69.94",hjust=-0.05,vjust=1.25, label.size = 0)+
+  geom_point(aes(x = Year,y=Avg.Temp),size = 4,data = Lastyear,color="black")+
+  geom_text(data=Lastyear,aes(x=Year,y=Avg.Temp,label = Avg.Temp), hjust=1.5, color = "black",size=3.5)+
+  geom_smooth(data = Before75, aes(x=Year, y=Avg.Temp), method = "lm", se = FALSE,color="#18B4E5")+
+  geom_smooth(data = After75, aes(x=Year, y=Avg.Temp), method = "lm", se = FALSE,color="#FF4233")+
+  geom_vline(xintercept = 1975, color = "black",lty="dashed")+
+  scale_x_continuous(limits = c(1895,2020), breaks = seq(1895,2020,25))+
+  labs(x="Year",y="Average Annual Temperature(°F)",title = "Average Annual Temperature in °F Change",subtitle="The Case of Tucson, AZ from 1895 to 2020", caption = "Data source: Carnegie Mellon University\n https://kilthub.cmu.edu") 
+
+plot3=TC+theme_Tucson()  
+print(plot3)
+```
+
+## Crafting a Compelling Narrative

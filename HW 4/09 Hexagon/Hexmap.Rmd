@@ -1,0 +1,49 @@
+---
+title: "Median HH Income"
+author: "Jingyi Li"
+date: "2023-11-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(sf)
+library(ggplot2)
+library(tidycensus)
+library(tmap)
+```
+
+## Data
+
+```{r cars}
+hex <- st_read('us_states_hexgrid/us_states_hexgrid/us_states_hexgrid.shp')
+hex <- hex %>%
+  mutate(google_nam = gsub(" \\(United States\\)", "", google_nam))%>%
+  rename(NAME = google_nam,
+         Abbr = iso3166_2)
+hex_crs <- st_crs(hex)
+```
+
+```{r}
+api_key <- "ab9309f9cc70c0e1895e7166c3ca981c40cf0331"
+variables <- c("NAME", "B19013_001E")
+medHHinc<- get_acs(geography = "state", variables = variables, year = 2019)
+```
+
+```{r pressure, echo=FALSE}
+joined_data <- merge(hex, medHHinc, by.x = "NAME", by.y = "NAME")
+```
+
+## Plot
+
+```{r}
+tm <- tm_shape(joined_data)
+tm + 
+  tm_fill("estimate", palette = "Blues", title="Median Household Income")+
+  tm_borders(col = 'white')+
+  tm_text("Abbr", size = 0.8, col = "black", bg.color = "transparent")+
+  tm_layout(frame = FALSE, legend.frame = FALSE)+
+  tm_title("Median Household Income by State")+
+  tmap_mode("plot")
+
+```

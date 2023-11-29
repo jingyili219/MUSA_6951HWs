@@ -1,0 +1,8 @@
+"0","# plot parkings"
+"0","mf_layout(scale=FALSE,"
+"0","          arrow=TRUE,"
+"0","  title = ""Viewpoint Parking  in Grand Teton National Park"","
+"0","  credits = paste0("
+"0","    ""Sources: ArcGIS Open Data\n"","
+"0","    ""mapsf "","
+"0","    packageVersion(""mapsf"")))"

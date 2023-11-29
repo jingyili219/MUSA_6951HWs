@@ -1,0 +1,31 @@
+"0","install.packages(""mapsf"")"
+"2","WARNING: Rtools is required to build R packages but is not currently installed. Please download and install the appropriate version of Rtools before proceeding:
+
+https://cran.rstudio.com/bin/windows/Rtools/
+"
+"2","Installing package into ‘C:/Users/Jingyi's lenovo/AppData/Local/R/win-library/4.3’
+(as ‘lib’ is unspecified)
+"
+"2","trying URL 'https://cran.rstudio.com/bin/windows/contrib/4.3/mapsf_0.8.0.zip'
+"
+"2","Content type 'application/zip'"
+"2"," length 2028720 bytes (1.9 MB)
+"
+"2","downloaded 1.9 MB
+
+"
+"1","package ‘mapsf’ successfully unpacked and MD5 sums checked
+"
+"1","
+"
+"1",""
+"1","The downloaded binary packages are in
+	C:\Users\Jingyi's lenovo\AppData\Local\Temp\RtmpGIX7E6\downloaded_packages"
+"1",""
+"1","
+"
+"0","library(mapsf)"
+"2","Warning: package ‘mapsf’ was built under R version 4.3.2"
+"0","wins <- read.csv(""wins.csv"")"
+"0","joined <- left_join(Baseball, wins)"
+"2","Joining with `by = join_by(TEAM)`"

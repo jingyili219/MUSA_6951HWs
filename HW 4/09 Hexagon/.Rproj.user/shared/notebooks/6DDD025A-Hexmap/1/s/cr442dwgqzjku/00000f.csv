@@ -1,0 +1,7 @@
+"0","api_key <- ""ab9309f9cc70c0e1895e7166c3ca981c40cf0331"""
+"0","variables <- c(""NAME"", ""B19013_001E"")"
+"0","medHHinc<- get_acs(geography = ""state"", variables = variables, year = 2019)"
+"2","Getting data from the 2015-2019 5-year ACS
+"
+"2","Fetching data by table type (""B/C"", ""S"", ""DP"") and combining the result.
+"

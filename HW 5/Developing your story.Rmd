@@ -1,0 +1,122 @@
+---
+title: "MUSA 6951 HW5"
+author: "Jingyi Li"
+date: "2023-11-12"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r message = FALSE,warning = FALSE}
+library(tidyverse)
+library(tidycensus)
+library(sf)
+library(patchwork)
+library(grid)
+library(gridExtra)
+library(gridtext)
+library(ggtext)
+```
+
+## Audience Identification  
+|    The target audience for my story is Ali Zaidi the head of the officials at the The White House Office of Domestic Climate Policy (Climate Policy Office). The rationale to choose Zaidi at the Climate Policy Office is because he plays the major role in shaping and implementing climate policies at nationwide level. He the key decision makers of climate change issues and has the highest authority and power to address those climate change and global warming issues.
+|    The most persuasive and valuable information for government official, including Zaidi, is data for they rely on data as the major evidence to make decisions. The data part should present clear and compelling visualization that convey the trends of climate change with the highlighted urgency.This will enable officials to make evidence-based decisions and prioritize the problem.
+|    The official also regard direct suggestions as useful information. So it is ideal that the story can provide call to action or advice on potential solution. The story needs recommending specific policies or strategies for addressing climate challenges.
+|    Also, official are often results-oriented. The story can include some severe negative impacts that climate change will cause if no further actions are taken to address the issues.  
+
+## Data Selection and Preparation  
+|    The data will focus on demonstrating the dramatic change in Tucson's average annual temperature from 1895 to 2020. It will emphasize the urgency of addressing climate change. The reason for using Tucson as the example is because its fragile desert ecosystems will face more noticeable and severe impacts from climate change, such as a more significant higher temperatures which can increased the problem of water scarcity, and higher frequency of wildfires.
+|    The historical climate data is accessed and downloaded from one of the online data libraries of Carnegie Mellon University.The downloaded data is continuous and has no missing values.I have split the data into two sets, one is "before 1975", and another is "after 1975".This is due to the year 1975 is when I observe a significant rise in average annual temperatures.To visually represent the changes more intuitively, I also averaged the two sets of data. 
+
+```{r pressure, echo=FALSE}
+TChange<-read.csv("Tucson.csv")
+Before75 <-subset(TChange, Year <= 1975)
+After75<-filter(TChange,Year>=1975)
+Highestyear<-filter(TChange,Year==2017)
+AvgBefore75<-mean(Before75$Avg.Temp)
+AvgAfter75<-mean(After75$Avg.Temp)
+AvgYearBefore75<-mean(Before75$Year)
+AvgYearAfter75<-mean(After75$Year)
+```
+
+## Data Visualization
+
+```{r fig.height=8, fig.width=12, message=FALSE, warning=FALSE}
+theme_Tucson<-function(){
+  font<-"Times New Roman"
+  theme_minimal()%+replace%
+theme(
+  panel.grid.major = element_line(),
+  panel.grid.minor= element_blank(),
+  axis.ticks=element_blank(),
+  axis.line.x = element_line(),
+  axis.line.y = element_line(),
+  plot.title = element_text(
+    family= font,
+    size=20,
+    face="bold",
+    hjust=0,
+    vjust=2,
+    color="black"),
+  plot.subtitle = element_text(
+    family=font,
+    size=15,
+    hjust=0,
+    vjust=2,
+    color="black"),
+  plot.caption=element_text(
+    family=font,
+    size=9,
+    hjust=1,
+    vjust=-0.5),
+  axis.text = element_text(
+    family=font,
+    size=10),
+  axis.text.y=element_text(
+    family=font,
+    size=9,
+    margin = margin(r=5)),
+  axis.text.x = element_text(
+    margin = margin(l=5,b=10)
+  )
+)}
+
+grob_explanation <- grobTree(richtext_grob(
+  "<span style='background-color:white'><b>From 1895 to 1975,</b><br>the variation in average annual temperature was relatively even, <br>averaging 67.25 °F.</span>", 
+  x=.35,  y=.9, hjust=0.6, vjust=0.8,gp=gpar(col = "blue", fontsize=11), box_gp = gpar(col = "transparent", fill = "transparent"),padding = margin(.4,0,0,0,"in")))
+
+TC <- ggplot()+
+  geom_point(aes(x = Year,y=Avg.Temp),size = 3,data = Before75,color="grey")+
+  geom_point(aes(x = Year,y=Avg.Temp),size = 3,data = After75,color="grey")+
+  geom_point(aes(x = AvgYearBefore75,y=AvgBefore75),size=4,color="blue") + 
+  geom_label(aes(x = AvgYearBefore75, y = AvgBefore75), label = "AVG=67.25", hjust = 0.9,vjust=-1, label.size = 0, fill="transparent")+
+  geom_point(aes(x = AvgYearAfter75,y=AvgAfter75),size=4,color="darkred") + 
+  geom_label(aes(x = AvgYearAfter75, y = AvgAfter75), label = "AVG=69.94",hjust=-0.05,vjust=1.25, label.size = 0,fill="transparent")+
+  geom_point(aes(x = Year,y=Avg.Temp),size = 3,data = Highestyear,color="black")+
+  geom_text(data=Highestyear,aes(x=Year,y=Avg.Temp,label = Avg.Temp), hjust=1.5, color = "black",size=3.5)+
+  geom_smooth(data = Before75, aes(x=Year, y=Avg.Temp), method = "lm", se = FALSE,color="#18B4E5")+
+  geom_smooth(data = After75, aes(x=Year, y=Avg.Temp), method = "lm", se = FALSE,color="#FF4233")+
+  geom_vline(xintercept = 1975, color = "black",lty="dashed")+
+  annotate("text", x = 1975, y = max(Before75$Avg.Temp), label = "Year 1975", vjust = -8, hjust = 0.5, color = "black") +
+  annotation_custom(grob_explanation)+
+  scale_x_continuous(limits = c(1895,2020), breaks = seq(1895,2020,25))+
+  labs(x="Year",y="Average Annual Temperature(°F)",title = "Skyrocketing Average Annual Temperature in Tucson",
+    subtitle = "Unveiling the Climate Change from 1895 to 2020", caption = "Data source: Carnegie Mellon University\n https://kilthub.cmu.edu") 
+
+plot3=TC+theme_Tucson()  
+print(plot3)
+```
+
+## Crafting a Narrative 
+|    Located in the heart of the southern Arizona desert, Tucson has silently witnessed a dramatic climate transformation that demands our attention. Beginning in 1895, the increase of average annual temperature was relatively steady, maintaining an average of 67.25°F until the turning point in 1975. We can observe a noticeable rising in the average annual temperature of Tucson since 1975. The average temperature after 1975 soared close to 70 degrees Fahrenheit, and even reached a record-breaking high of 73.25 °F in 2017. By comprehensively examining the data, the motivation is not only to present a data-oriented scientific findings but also to emphasize the urgency regarding the implications for policies and actions on dealing with climate change related issues.
+|    Tucson's climate trend transcends its geographical boundaries and can become a microcosmic lens of regional, national, and even global climate challenges. To address the rising temperature issues, I propose the following actions:1) Implementing energy efficiency programs that eliminate and replace high-energy-consuming facilities in agriculture, industries, and transportation to decrease energy consumption and promote sustainability.2)Reinforcing carbon taxes or cap-and-trade systems, to urge industries and individuals to reduce their carbon footprint.3) Promoting climate education programs to enhance public awareness of climate change's impacts, and the importance of sustainable living.
+|    Supported by the IPCC, climate change and global warming has not only caused displacement of coastal communities due to sea level rising and more frequent and severe hurricanes, but also harming the inland communities with more extreme and frequent heatwaves, and wildfires. Heat-related illnesses, mental stress, and increased air pollution contribute to adverse health outcomes is also increased due to climate change (The Lancet,2021). Conflicts and instability arises because of water scarcity and reduced food productivity which are also caused by climate change (IPCC,n.d.). Moreover, vulnerable communities can face disproportionate impacts which results in worsening existing social inequalities (United Nations Development Program, 2020). However, actively response to climate change issues can help reduce and avoid numerous downsides across various dimensions including but not limited to ecosystems, public health, economies, and security.
+
+## References
+Climate change 2022: Impacts, adaptation and vulnerability. IPCC. (n.d.).  https://www.ipcc.ch/report/sixth-assessment-report-working-group-ii/ 
+
+The Lancet. (2021, January 9).The 2020 report of The Lancet Countdown on health and climate change: responding to converging crises. https://www.thelancet.com/article/S0140-6736(20)32290-X/fulltext 
+
+Nations, U. (2020, December 15). Human development report 2020. Human Development Reports. https://hdr.undp.org/content/human-development-report-2020#:~:text=The%20Next%20Frontier%3A%20Human%20Development%20and%20the%20Anthropocene,-Posted%20on%3A%20December&amp;text=It%20shows%20that%20we%20are,inequalities%2C%20threatening%20significant%20development%20reversals. 

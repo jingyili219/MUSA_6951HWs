@@ -1,0 +1,166 @@
+---
+title: "Reproducible Vignette--Mapview"
+author: "Jingyi Li"
+date: "2023-09-24"
+output: output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    theme: Sandstone
+    highlight: tango
+    code_folding: hide
+    fig_caption: true
+    self_contained: true
+    df_print: paged
+    css: styles.css
+---
+## Set Up
+
+```{r setup, include=FALSE}
+install.packages("tidycensus")
+install.packages("tigris")
+install.packages("dplyr")
+install.packages("leaflet.extras2")
+```
+
+## Introduction
+
+  The "mapview" function in R produces an interactive view of the specified spatial object on top of the specified base maps.The primary objective of "mapview" function is to address the need for fast and non-professional interactive plotting that enables the exploration and visual analysis of both spatial data components: the geometries and their associated attributes. One great advantage of "mapview" function is that it can provide explanatory visualization with easy and simple codes. Moreover, mapview has a few syntax options for viewing multiple maps and users can easily do customizations on their maps.
+
+## Installation
+
+Installation is extreamely easy, we simply follow the steps of launching ordinary functions in R, using *install.package* and load it with *library*. 
+
+```{r installation}
+install.packages("mapview")
+library("mapview")
+```
+
+## Usage
+
+### Basic Usage 
+ 
+  The fundamental purpose of the "mapview" function lies in the visualization and interaction with geospatial data against a backdrop of a map. In the subsequent illustration, I commence by retrieving online geojson data of the Washington D.C. metro stations. Subsequently, I apply the "mapview" function to render a visual representation of this data. Through the utilization of the "mapview" function, individuals engaging with the visualization are afforded the capability to not only zoom in and out of the map but also access rudimentary information by selecting specific points of interest. Furthermore, users are enabled to navigate the map's geographic context by dragging it to explore the surrounding areas.
+  
+```{r points}
+library("sf")
+dc_metro<-st_read("https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Transportation_Rail_Bus_WebMercator/MapServer/52/query?outFields=*&where=1%3D1&f=geojson")
+mapview(dc_metro)
+```
+  
+  In addition to its capacity for visualizing points, the "mapview" function is also proficient in the visualization of lines. Like the process involved in visualizing points, the initial step contains the acquisition of the requisite data. In this particular instance, I procured line data, which is formatted in geojson as well, from Arcgis Open Data. This dataset includes major river networks within the state of Florida. Upon the application of the "mapview" function to display this dataset, viewers are afforded the same degree of interactivity as they experienced with the point data.
+  
+```{r lines}
+floridaRivers<-st_read("https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/MAJOR_RIVERS_LINES/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson")
+mapview(floridaRivers)
+```
+  
+  Certainly, the "mapview" function is capable of rendering polygon data. In the subsequent demonstration, I acquired county data for Arizona from the identical website as both points and lines, and applied the "mapview" function to facilitate interactive visualization.
+  
+```{r polygons}
+arizonaCounty<-st_read("https://services1.arcgis.com/mpVYz37anSdrK4d8/arcgis/rest/services/Arizona_County_Boundary/FeatureServer/1/query?outFields=*&where=1%3D1&f=geojson")
+mapview(arizonaCounty)
+```
+
+### Advanced Usage and Customization
+
+  The "Mapview" function is also capable of rendering a dataset with respect to a particular column with an extra argument of **zcol=()**. I obtained ACS data from both the years 2010,2015, and 2020 and performed some necessary modifications. Subsequently, I merged the data from these two years by matching values in the "GEOID" column. I created a new column representing the percentage change in population from 2010 to 2020. Lastly, I employed the "Mapview" function to visualize the data based on this population percentage change.
+  
+```{r particular column}
+library("tidycensus")
+library("dplyr")
+library("tigris")
+
+tracts10 <-  # getting census data of AZ from 2010
+  get_acs(geography = "county",
+          variables = c("B25026_001E"), 
+          year=2010, state=04, geometry=TRUE) %>% 
+  st_transform('EPSG:4326')%>%
+  dplyr::select( -NAME, -moe) %>%
+  rename(TotalPop = variable,
+         PopCount10=estimate)
+
+tracts15 <-  # getting census data of AZ from 2015
+  get_acs(geography = "county",
+          variables = c("B25026_001E"), 
+          year=2015, state=04, geometry=TRUE) %>% 
+  st_transform('EPSG:4326')%>%
+  dplyr::select( -NAME, -moe) %>%
+  rename(TotalPop = variable,
+         PopCount15=estimate)
+
+tracts20 <-  # getting census data of AZ from 2020
+  get_acs(geography = "county",
+          variables = c("B25026_001E"), 
+          year=2020, state=04, geometry=TRUE) %>% 
+  st_transform('EPSG:4326')%>%
+  dplyr::select( -NAME, -moe) %>%
+  rename(TotalPop = variable,
+         PopCount20=estimate)
+
+censusData_1015 <- merge.data.frame(tracts10, tracts15, by="GEOID")%>% #Merging 2010 and 2015 dataset in to one based on "GEOID" column
+  mutate(PctChange10_15= ifelse(PopCount10 > 0, (PopCount15-PopCount10)/PopCount10,0))# Creating a new column of population percent change from 2010 to 2015
+all_censusData<- merge.data.frame(censusData_1015, tracts20, by="GEOID")%>%#Merging all census data
+  mutate(PctChange15_20= ifelse(PopCount15 > 0, (PopCount20-PopCount15)/PopCount15,0))
+all_data <- inner_join(arizonaCounty, all_censusData, by = c("GEOID" = "GEOID"))
+mapview(all_data, zcol = "PctChange10_15") #Visualize based on population change colunm
+```
+
+  If you find the default color palette of the map unappealing, you have the flexibility to alter the visual aesthetics by adjusting the **col.regions** parameter and regulating transparency using the **alpha** parameter.
+  
+```{r customize}
+mapview(all_data, zcol = "PctChange10_15", 
+         col.regions = RColorBrewer::brewer.pal(5, "Purples"), 
+         alpha.regions = 1)
+```
+
+Now, let's explore a couple of the intriguing syntax choices.
+
+```{r Dataprep_syntax}
+map1015 <- mapview(all_data, zcol = "PctChange10_15",
+                   layer.name = "Pct change 2010-2015")
+
+map1520 <- mapview(all_data, zcol = "PctChange15_20", 
+                   layer.name = "Pct change 2015-2020")
+```
+
+You have the capability to arrange the maps in a parallel manner and synchronize their movements using the leafsync package in conjunction with the **sync()** function.
+
+```{r sync}
+library(leafsync)# Create maps parallels each other
+sync(map1015, map1520)
+```
+
+Alternatively, you can overlay two maps on a single layer and use a slider placed side by side to facilitate a comparative analysis of the two maps. This functionality is made possible by utilizing the **leaflet.extras2** package in combination with the "|" (Unix pipe, not R pipe) character.
+
+```{r slider}
+library(leaflet.extras2)# Create map with slider
+map1015 | map1520
+```
+
+Legends, pop-ups, or hover text can be turned off with FALSE statements.
+
+```{r}
+mapview(all_data, zcol = "PctChange10_15", 
+        legend = FALSE, label = FALSE, popup = FALSE)
+```
+
+  Achieving the removal of the background map while retaining interactivity can be accomplished with the following TRUE statement.
+  
+```{r}
+mapview(all_data, zcol = "PctChange10_15", 
+        native.crs = TRUE)
+```
+
+## Conclusion
+
+  In this tutorial, the "mapview" function has been introduced, showcasing its utility in the creation of interactive visualizations that facilitate analysis of both geometries and their associated attributes. The fundamental functionality of "mapview" lies in its capacity to process and represent spatial data in the form of points, lines, and polygons with background map to reference the accurate location. Moreover, it offers the ability to visualize a particular column within a dataset. The customization of visualizations is remarkably easy and convenient through the application of the "mapview" function.Besides,"mapview" function can act as a great tool to make comparison and contrast of two maps.
+  More Detailed instructions and information are available online if you want to become a master of using "mapview" function. I recommend read through the article written by Sharon Machlis at https://www.infoworld.com/article/3644848/astonishingly-easy-mapping-in-r-with-mapview.html as she did an way more explicit job on explaining the function. Also you may file bug reports and feature requests regarding "mapview" function at https://github.com/r-spatial/mapview/issues.
+  
+## Evaluation
+
+  Clarity and organization of content: I have asked ChatGPT to polish my writing and giving some revision on some unclear content, so the tutorial should be easy and clear to read. Organization is strictly following the assignment instruction and contents are carefully arranged under different subtitles.
+Accuracy and correctness of code examples: I am capable of running all the code without any errors at my end, so I give myself 10/10 for this part.
+The reproducibility of your tutorial: Is this going to work when you share it with your classmates? Not sure yet, hopefully I will find out during class.
+Overall presentation and readability of your R Markdown document: I am confident in my work, for I have detailed instructions, well-annotated codes, and a clear format. Therefore, give myself a 10/10 for this part of evaluation as well. 

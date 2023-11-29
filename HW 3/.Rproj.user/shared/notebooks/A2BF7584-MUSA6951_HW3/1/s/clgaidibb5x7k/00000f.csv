@@ -1,0 +1,17 @@
+"0","PhillySchool<-read_csv(""City_of_Philadelphia_Schools.csv"")"
+"2","[1mRows: [22m[34m490[39m [1mColumns: [22m[34m17[39m"
+"2","[36m──[39m [1mColumn specification[22m [36m─────────────────────────────────────────────────────────────────────────────────────────────[39m
+[1mDelimiter:[22m "",""
+[31mchr[39m (9): LOCATION_ID, SCHOOL_NAME, SCHOOL_NAME_LABEL, STREET_ADDRESS, PHONE_NUMBER, ACTIVE, GRADE_LEVEL, GRADE_OR...
+[32mdbl[39m (8): X, Y, OBJECTID, AUN, SCHOOL_NUM, ZIP_CODE, ENROLLMENT, TYPE"
+"2","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message."
+"0","SchoolType<-PhillySchool %>%"
+"0","  group_by(TYPE_SPECIFIC) %>%"
+"0","  summarise(count = n())"
+"0",""
+"0","GradeLevel<-PhillySchool %>%"
+"0","  group_by(GRADE_LEVEL) %>%"
+"0","  summarise(count = n())%>%"
+"0","  filter(count>5)"

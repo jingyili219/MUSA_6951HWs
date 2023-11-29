@@ -1,0 +1,1 @@
+{"frames":[{"func":"tracts16 %>% filter(variable == \"B25026_001\")","file":"","line_number":0,"end_line_number":0,"character_number":0,"end_character_number":0},{"func":"filter(., variable == \"B25026_001\")","file":"","line_number":0,"end_line_number":0,"character_number":0,"end_character_number":0}],"message":"Error: object 'tracts16' not found\n"}

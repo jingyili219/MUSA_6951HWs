@@ -1,0 +1,50 @@
+"0","library(sf)"
+"2","Warning: package ‘sf’ was built under R version 4.3.2"
+"2","Linking to GEOS 3.11.2, GDAL 3.7.2, PROJ 9.3.0; sf_use_s2() is TRUE
+"
+"0","library(tmap)"
+"2","Registered S3 method overwritten by 'data.table':
+  method           from
+  print.data.table     
+"
+"2","Registered S3 method overwritten by 'htmlwidgets':
+  method           from         
+  print.htmlwidget tools:rstudio
+"
+"2","The legacy packages maptools, rgdal, and rgeos, underpinning the sp package,
+which was just loaded, will retire in October 2023.
+Please refer to R-spatial evolution reports for details, especially
+https://r-spatial.org/r/2023/05/15/evolution4.html.
+It may be desirable to make the sf package available;
+package maintainers should consider adding sf to Suggests:.
+The sp package is now running under evolution status 2
+     (status 2 uses the sf package in place of rgdal)
+"
+"2","
+Attaching package: ‘tmap’
+
+"
+"2","The following object is masked from ‘package:datasets’:
+
+    rivers
+
+"
+"0","library(dplyr)"
+"2","
+Attaching package: ‘dplyr’
+
+"
+"2","The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+"
+"0","library(mapsf)"
+"2","Warning: package ‘mapsf’ was built under R version 4.3.2"
+"0","library(ggplot2)"
+"2","Warning: package ‘ggplot2’ was built under R version 4.3.2"

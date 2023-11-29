@@ -1,0 +1,1 @@
+"0","ggsave(""GrandCanyonTrails.jpeg"", plot = GCTrails, width = 10, height = 8, units = ""in"", dpi = 300)"

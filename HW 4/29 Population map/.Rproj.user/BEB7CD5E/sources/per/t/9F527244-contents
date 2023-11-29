@@ -1,0 +1,667 @@
+---
+title: "MUSA 508 HW6"
+author: "Jingyi Li"
+date: "2023-11-14"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE, warning=FALSE,message=FALSE}
+library(tidyverse)
+library(sf)
+library(lubridate)
+library(tigris)
+library(tidycensus)
+library(viridis)
+library(riem)
+library(gridExtra)
+library(knitr)
+library(kableExtra)
+library(RSocrata)
+library(gganimate)
+
+plotTheme <- theme(
+  plot.title =element_text(size=12),
+  plot.subtitle = element_text(size=8),
+  plot.caption = element_text(size = 6),
+  axis.text.x = element_text(size = 10, angle = 45, hjust = 1),
+  axis.text.y = element_text(size = 10),
+  axis.title.y = element_text(size = 10),
+  # Set the entire chart region to blank
+  panel.background=element_blank(),
+  plot.background=element_blank(),
+  #panel.border=element_rect(colour="#F0F0F0"),
+  # Format the grid
+  panel.grid.major=element_line(colour="#D0D0D0",size=.2),
+  axis.ticks=element_blank())
+
+mapTheme <- theme(plot.title =element_text(size=12),
+                  plot.subtitle = element_text(size=8),
+                  plot.caption = element_text(size = 6),
+                  axis.line=element_blank(),
+                  axis.text.x=element_blank(),
+                  axis.text.y=element_blank(),
+                  axis.ticks=element_blank(),
+                  axis.title.x=element_blank(),
+                  axis.title.y=element_blank(),
+                  panel.background=element_blank(),
+                  panel.border=element_blank(),
+                  panel.grid.major=element_line(colour = 'transparent'),
+                  panel.grid.minor=element_blank(),
+                  legend.direction = "vertical", 
+                  legend.position = "right",
+                  plot.margin = margin(1, 1, 1, 1, 'cm'),
+                  legend.key.height = unit(1, "cm"), legend.key.width = unit(0.2, "cm"))
+
+palette5 <- c("#eff3ff","#bdd7e7","#6baed6","#3182bd","#08519c")
+palette4 <- c("#D2FBD4","#92BCAB","#527D82","#123F5A")
+palette2 <- c("#6baed6","#08519c")
+# Install Census API Key
+tidycensus::census_api_key("ab9309f9cc70c0e1895e7166c3ca981c40cf0331", overwrite = TRUE)
+```
+
+## Introduction
+
+|    Bike-sharing have become a popular urban transportation mode in recent decade. Bike-sharing provides a convenient and eco-friendly choice for short-distance travel. As cities embrace this sustainable mode of travel, the challenge of maintaining an equilibrium in the distribution of bikes across various stations arises. This need for re-balancing bikes across stations, for it is crucial to ensure that bikes are readily available at popular pick-up points and that there is sufficient biking racks at busy drop-off locations. Failure to address this issue can lead to bike shortages in high-demand areas and excess bikes in less frequented locations, impacting the overall efficiency and attractiveness of the bike-share system.
+|     To tackle the re-balancing challenge, we can manage a fleet of trucks dedicated to redistributing bikes strategically among stations. The effectiveness of these strategies relies on a predictive understanding of when and where imbalances are likely to occur. Therefore, the plan for re-balancing will significantly influence the choice of time lag features used in predictive modeling.It's also essential to consider the time it takes for the trucks to move between bike stations. The logistical aspects of re-balancing, the high demanding rush hours can increase the travel time and operational constrains for trucks as will, which will impact the time lags. 
+
+## Data Wrangle
+
+### Import bike data and census data  
+|    I am analyzing New York City Citibike trip data of November, 2019. The data is retrieve from "citibikenyc.com" and includes Ride ID, Rideable type, Started at, Ended at, Start station name, Start station ID, End station name, End station ID, Start latitude, Start longitude, End latitude,End Longitude, Member or casual ride. The time data is then manipulated into 15 minutes intervals and 60 minutes intervals. I also imported some census data using census API to calculate for percentage of white population,mean commute time, and percent of population taking public transportation.
+
+```{r message=FALSE, warning=FALSE,echo=TRUE,results='hide'}
+#read in data
+dat <- read.csv("C:/Users/Jingyi's lenovo/Desktop/Penn/Fall 2023/MUSA 5080/Week 9/HW 6/201911-citibike-tripdata.csv/201911-citibike-tripdata.csv")
+# bin the data by 15 and 60 minute intervals by rounding
+dat2 <- dat %>%
+  mutate(interval60 = floor_date(ymd_hms(starttime), unit = "hour"),
+         interval15 = floor_date(ymd_hms(starttime), unit = "15 mins"),
+         week = week(interval60),
+         dotw = wday(interval60, label=TRUE))
+
+# import census data
+nycCensus <- 
+  get_acs(geography = "tract", 
+          variables = c("B01003_001", "B19013_001", 
+                        "B02001_002", "B08013_001",
+                        "B08012_001", "B08301_001", 
+                        "B08301_010", "B01002_001"), 
+          year = 2019, 
+          state = "NY", 
+          geometry = TRUE, 
+          county=c("New York"),
+          output = "wide") %>%
+  rename(Total_Pop =  B01003_001E,
+         Med_Inc = B19013_001E,
+         Med_Age = B01002_001E,
+         White_Pop = B02001_002E,
+         Travel_Time = B08013_001E,
+         Num_Commuters = B08012_001E,
+         Means_of_Transport = B08301_001E,
+         Total_Public_Trans = B08301_010E) %>%
+  select(Total_Pop, Med_Inc, White_Pop, Travel_Time,
+         Means_of_Transport, Total_Public_Trans,
+         Med_Age,
+         GEOID, geometry) %>%
+  mutate(Percent_White = White_Pop / Total_Pop,
+         Mean_Commute_Time = Travel_Time / Total_Public_Trans,
+         Percent_Taking_Public_Trans = Total_Public_Trans / Means_of_Transport)
+```
+
+### Import and join census tract
+
+|    I add the spatial information to the rideshare data as origin and destination data. To do so, I first joined the origin station, then the destination station to the census data. I also filter out the data that is not within the boundary of available tracts, and only remain those located in Manhattan.
+
+```{r message=FALSE, warning=FALSE}
+#tract geometry
+nycTracts <- 
+  nycCensus %>%
+  as.data.frame() %>%
+  distinct(GEOID, .keep_all = TRUE) %>%
+  select(GEOID, geometry) %>% 
+  st_sf
+
+#add census tracts
+dat_census <- st_join(dat2 %>% 
+          filter(is.na(start.station.longitude) == FALSE &
+                   is.na(start.station.latitude) == FALSE &
+                   is.na(end.station.latitude) == FALSE &
+                   is.na(end.station.longitude) == FALSE) %>%
+          st_as_sf(., coords = c("start.station.longitude", "start.station.latitude"), crs = 4326),
+        nycTracts %>%
+          st_transform(crs=4326),
+        join=st_intersects,
+              left = TRUE) %>%
+  rename(Origin.Tract = GEOID) %>%
+  mutate(start.station.longitude = unlist(map(geometry, 1)),
+         start.station.latitude = unlist(map(geometry, 2)))%>%
+  as.data.frame() %>%
+  select(-geometry)%>%
+  st_as_sf(., coords = c("end.station.longitude", "end.station.latitude"), crs = 4326) %>%
+  st_join(., nycTracts %>%
+            st_transform(crs=4326),
+          join=st_intersects,
+          left = TRUE) %>%
+  rename(Destination.Tract = GEOID)  %>%
+  mutate(end.station.longitude = unlist(map(geometry, 1)),
+         end.station.latitude = unlist(map(geometry, 2)))%>%
+  as.data.frame() %>%
+  select(-geometry)
+
+#filter out origin station and destination station that ar outside the boundary of NYC
+dat_census<-dat_census%>%filter(!is.na(Origin.Tract), !is.na(Destination.Tract))
+```
+
+### Import weather data
+
+|    The function called "riem_measures" is capable of importing weather data from a specific period. I checked for the ASOS weather station code for New York City is **NYC**. After that, I `mutate` the data to get temperature, wind speed, precipitation on an hourly basis and plot the temperature and precipitation trends over study period.
+|    November,2019 in New York does not have much precipitation, mostly contributed by the week between Nov. 18th and Nov. 25th. Wind speed mostly ranges between 5-10 mph, but sometimes can reach as high as 15 mph. Temperature variation is huge, can be as high as 70, and as low as below 30.
+
+```{r}
+weather.Panel <- 
+  riem_measures(station = "NYC", date_start = "2019-11-01", date_end = "2019-11-30") %>%
+  dplyr::select(valid, tmpf, p01i, sknt)%>%
+  replace(is.na(.), 0) %>%
+    mutate(interval60 = ymd_h(substr(valid,1,13))) %>%
+    mutate(week = week(interval60),
+           dotw = wday(interval60, label=TRUE)) %>%
+    group_by(interval60) %>%
+    summarize(Temperature = max(tmpf),
+              Precipitation = sum(p01i),
+              Wind_Speed = max(sknt)) %>%
+    mutate(Temperature = ifelse(Temperature == 0, 42, Temperature))
+```
+
+```{r}
+grid.arrange(
+  ggplot(weather.Panel, aes(interval60,Precipitation)) + geom_line() + 
+  labs(title="Precipitation", x="Hour", y="Perecipitation") + plotTheme,
+  ggplot(weather.Panel, aes(interval60,Wind_Speed)) + geom_line() + 
+    labs(title="Wind Speed", x="Hour", y="Wind Speed") + plotTheme,
+  ggplot(weather.Panel, aes(interval60,Temperature)) + geom_line() + 
+    labs(title="Temperature", x="Hour", y="Temperature") + plotTheme,
+  top="Weather Data - New York City - November, 2019 ")
+```
+
+## Explore patterns
+
+|    Exploring the overall time pattern: Weekends usually have less demands than weekdays, also Thanksgiving holiday is showing a noticeable dip than any other Weekday demands have two peaks, one in the mornings and another in the evenings, while weekend demands only have one hump and concentrates in mid-day.
+
+```{r pressure, echo=FALSE}
+ggplot(dat_census %>%
+         group_by(interval60) %>%
+         tally())+
+  geom_line(aes(x = interval60, y = n))+
+  labs(title="Bike share trips per hr. NYC, November, 2019",
+       x="Date", 
+       y="Number of trips")+
+  plotTheme
+```
+
+|    Exploring the distribution of trip volume by station for different times of the day: Overnight trips have the lowest trip number, but has high frequency of trips under 10. Morning rush and evening rush have low frequency but higher number of trips, especially for morning rush, there are outliers of number of trips at over 40.
+
+```{r message=FALSE, warning=FALSE}
+dat_census %>%
+        mutate(time_of_day = case_when(hour(interval60) < 7 | hour(interval60) > 18 ~ "Overnight",
+                                 hour(interval60) >= 7 & hour(interval60) < 10 ~ "AM Rush",
+                                 hour(interval60) >= 10 & hour(interval60) < 15 ~ "Mid-Day",
+                                 hour(interval60) >= 15 & hour(interval60) <= 18 ~ "PM Rush"))%>%
+         group_by(interval60, start.station.name, time_of_day) %>%
+         tally()%>%
+  group_by(start.station.name, time_of_day)%>%
+  summarize(mean_trips = mean(n))%>%
+  ggplot()+
+  geom_histogram(aes(mean_trips), binwidth = 1)+
+  labs(title="Mean Number of Hourly Trips Per Station. NYC, Nov., 2019",
+       x="Number of trips", 
+       y="Frequency")+
+  facet_wrap(~time_of_day)+
+  plotTheme
+```
+
+|    The following trend is showing the same results as above. Morning and evening peaks during weekdays are around 8  and 17 respectively.Weekday morning demand can reach nearly 100,000 trips, but weekend high trips are lower than 25,000.
+
+```{r}
+#total bike share/hr by station
+ggplot(dat_census %>%
+         group_by(interval60, start.station.name) %>%
+         tally())+
+  geom_histogram(aes(n), binwidth = 5)+
+  labs(title="Bike share trips per hr by station. NYC, Nov., 2019",
+       x="Trip Counts", 
+       y="Number of Stations")+
+  plotTheme
+
+# categorized by day of the week
+ggplot(dat_census %>% mutate(hour = hour(starttime)))+
+     geom_freqpoly(aes(hour, color = dotw), binwidth = 1)+
+  labs(title="Bike share trips in NYC, by day of the week, Nov., 2019",
+       x="Hour", 
+       y="Trip Counts")+
+     plotTheme
+
+#categorized by weekend and weekday
+ggplot(dat_census %>% 
+         mutate(hour = hour(starttime),
+                weekend = ifelse(dotw %in% c("Sun", "Sat"), "Weekend", "Weekday")))+
+     geom_freqpoly(aes(hour, color = weekend), binwidth = 1)+
+  labs(title="Bike share trips in NYC, weekend vs weekday, Nov., 2019",
+       x="Hour", 
+       y="Trip Counts")+
+     plotTheme
+```
+
+## Create Space-Time Panel
+
+|    A ride panel is created for combining census, geomotry, and weather data together for each bike station. It is important to ensure the presence of each distinct station and hour/day combination within our dataset. This process is undertaken to construct a "panel," essentially a time-series dataset where each time period in the study corresponds to a row, regardless of whether an observation occurred during that period. Therefore, even if a station had no trips originating from it at a specific hour, we need to include a zero in the corresponding panel entry.
+
+```{r message=FALSE, warning=FALSE,echo=TRUE,results='hide'}
+length(unique(dat_census$interval60)) * length(unique(dat_census$start.station.id))
+
+
+study.panel <- 
+  expand.grid(interval60=unique(dat_census$interval60), 
+              start.station.id = unique(dat_census$start.station.id)) %>%
+  left_join(., dat_census %>%
+              select(start.station.id, start.station.name, Origin.Tract, start.station.longitude, start.station.latitude )%>%
+              distinct() %>%
+              group_by(start.station.id) %>%
+              slice(1))
+
+nrow(study.panel)     
+```
+```{r}
+ride.panel <- 
+  dat_census %>%
+  mutate(Trip_Counter = 1) %>%
+  right_join(study.panel) %>% 
+  group_by(interval60, start.station.id, start.station.name, Origin.Tract, start.station.longitude, start.station.latitude) %>%
+  summarize(Trip_Count = sum(Trip_Counter, na.rm=T)) %>%
+  left_join(weather.Panel) %>%
+  ungroup() %>%
+  filter(is.na(start.station.id) == FALSE) %>%
+  mutate(week = week(interval60),
+         dotw = wday(interval60, label = TRUE)) %>%
+  filter(is.na(Origin.Tract) == FALSE)
+```
+```{r}
+ride.panel <- 
+  left_join(ride.panel, nycCensus %>%
+              as.data.frame() %>%
+              select(-geometry), by = c("Origin.Tract" = "GEOID"))
+```
+
+## Create time lags
+
+|    Creating time lag variables introduces additional information into understanding the demand during a specific time period, including both the hours leading up to and during that day. We can also explore methods to account for the impact of the Thanksgiving holiday that may disrupt the anticipated demand patterns. 
+|    By observing the correlations, we find the most robust relationship of the "lagHour" and "lag1day", which has the Pearson's R value of 0.86 and 0.75 individually. 
+
+```{r}
+ride.panel <- 
+  ride.panel %>% 
+  arrange(start.station.id, interval60) %>% 
+  mutate(lagHour = dplyr::lag(Trip_Count,1),
+         lag2Hours = dplyr::lag(Trip_Count,2),
+         lag3Hours = dplyr::lag(Trip_Count,3),
+         lag4Hours = dplyr::lag(Trip_Count,4),
+         lag12Hours = dplyr::lag(Trip_Count,12),
+         lag1day = dplyr::lag(Trip_Count,24),
+         holiday = ifelse(yday(interval60) == 332,1,0)) %>%#thanksgiving in 2019 was the 332 day of the year
+   mutate(day = yday(interval60)) %>%
+   mutate(holidayLag = case_when(dplyr::lag(holiday, 1) == 1 ~ "PlusOneDay",
+                                 dplyr::lag(holiday, 2) == 1 ~ "PlustTwoDays",
+                                 dplyr::lead(holiday, 1) == 1 ~ "MinusOneDay",
+                                 dplyr::lead(holiday, 2) == 1 ~ "MinusTwoDays"),
+         holidayLag = ifelse(is.na(holidayLag) == TRUE, 0, holidayLag))
+```
+
+```{r}
+#evaluate lag
+as.data.frame(ride.panel) %>%
+    group_by(interval60) %>% 
+    summarise_at(vars(starts_with("lag"), "Trip_Count"), mean, na.rm = TRUE) %>%
+    gather(Variable, Value, -interval60, -Trip_Count) %>%
+    mutate(Variable = factor(Variable, levels=c("lagHour","lag2Hours","lag3Hours","lag4Hours",
+                                                "lag12Hours","lag1day")))%>%
+    group_by(Variable) %>%  
+    summarize(correlation = round(cor(Value, Trip_Count),2))
+```
+
+## Explanatory Analysis
+
+|    Conducting training on a period of 5 weeks, specifically weeks 44 to 48. Training uses the data from the first 3 weeks, namely weeks 44-46. And testing is the data for week 47 and 48. The rationale behind this approach is from potential generalizability of the time and space patterns observed, we can extrapolate and make projections into the near future.
+
+```{r}
+# splitting training and testing sets
+ride.panel_sf <- st_as_sf(ride.panel, coords = c("start.station.longitude", "start.station.latitude"))
+ride.Train <- filter(ride.panel_sf, week <= 46)
+ride.Test <- filter(ride.panel_sf, week > 46)
+```
+
+|    For the amenity requirement, subway stations in NYC is imported and utilized in calculating the distance from  hike stations to subways stations, accounting for spatial analysis. 
+
+```{r}
+#importing amenity data
+nycsubway<-read.csv("C:/Users/Jingyi's lenovo/Desktop/Penn/Fall 2023/MUSA 5080/Week 9/HW 6/MTA_NYCT_Subway_Entrances_and_Exits__2015_20231115.csv")
+
+dat_subway <- st_join(nycsubway %>% 
+          filter(is.na(Station.Longitude) == FALSE &
+                   is.na(Station.Latitude) == FALSE) %>%
+          st_as_sf(., coords = c("Station.Longitude", "Station.Latitude"), crs = 4326),
+        nycTracts %>%
+          st_transform(crs=4326),
+        join=st_intersects,
+              left = TRUE) %>%
+  rename(Station.Tract = GEOID) %>%
+  mutate(Subway.Station.Longitude = unlist(map(geometry, 1)),
+         Subway.Station.Latitude = unlist(map(geometry, 2)))%>%
+  as.data.frame() %>%
+  select(-geometry)%>%
+  filter(!is.na(Station.Tract))
+
+ggplot()+
+  geom_sf(data = nycTracts %>%
+          st_transform(crs=4326))+
+  geom_point(data = dat_subway,
+            aes(x=Subway.Station.Longitude, y = Subway.Station.Latitude), 
+            color="red",fill = "transparent", alpha = 0.7, size = 1)+
+  labs(title="Subway Stations in NYC")+
+  mapTheme
+```
+```{r}
+# bike stations distance to subway stations
+dat_subway_sf <- st_as_sf(dat_subway, coords = c("Subway.Station.Longitude", "Subway.Station.Latitude"))
+if (is.na(st_crs(ride.panel_sf))) {st_crs(ride.panel_sf) <- 4326}
+if (is.na(st_crs(dat_subway_sf))) {st_crs(dat_subway_sf) <- 4326}
+ride.panel_sf <- st_transform(ride.panel_sf, crs = 32633) 
+dat_subway_sf <- st_transform(dat_subway_sf, crs = 32633)
+nearest_subway_distances <- st_distance(ride.panel_sf, dat_subway_sf) %>% 
+  apply(1, FUN = min)
+ride.panel$nearest_subway_distance <- nearest_subway_distances
+
+nearest_subway_table <- data.frame(
+  Origin.Tract = ride.panel$Origin.Tract,
+  Nearest_Subway_Distance = nearest_subway_distances)
+head(nearest_subway_table)
+
+```
+
+### Serial Autocorrelation
+
+|    If Trip count has serial correlation, incorporating time lag features is expected to enhance prediction accuracy. The time series visualization below demonstrates the trends of bike trips. To aid in the visualization, geom_vline is employed to highlight Mondays, Thanksgiving with dotted line.
+|    Same as in the data exploration section, in most weeks, there are remarkably similar time series patterns characterized by consistent peaks and dips, indicating the presence of serial correlation. However, weeks surrounding Thanksgiving holiday emerge as distinct different pattern.
+
+```{r message=FALSE, warning=FALSE}
+mondays <- 
+  mutate(ride.panel,
+         monday = ifelse(dotw == "Mon" & hour(interval60) == 1,
+                         interval60, 0)) %>%
+  filter(monday != 0) 
+
+tg   <- as.POSIXct("2019-11-28 00:00:00 UTC")
+
+st_drop_geometry(rbind(
+  mutate(ride.Train, Legend = "Training"), 
+  mutate(ride.Test, Legend = "Testing"))) %>%
+    group_by(Legend, interval60) %>% 
+      summarize(Trip_Count = sum(Trip_Count)) %>%
+      ungroup() %>% 
+      ggplot(aes(interval60, Trip_Count, colour = Legend)) + geom_line() +
+        scale_colour_manual(values = palette2) +
+        geom_vline(xintercept = tg, linetype = "dotted") +
+        geom_vline(data = mondays, aes(xintercept = monday)) +
+        labs(title="Rideshare trips by week: November",
+             subtitle="Dotted line for Thanksgiving", 
+             x="Day", y="Trip Count") +
+        theme(panel.grid.major = element_blank())   
+```
+
+|    The robust correlations in trip count are shown in the visualization below. The correlation diminishes with each successive lag hour, and even became negative at 12 hours after, but there's a resurgence in predictive power with the 1-day lag.
+
+```{r message=FALSE, warning=FALSE}
+plotData.lag <-
+  filter(as.data.frame(ride.panel), week == 44) %>%
+  dplyr::select(starts_with("lag"), Trip_Count) %>%
+  gather(Variable, Value, -Trip_Count) %>%
+  mutate(Variable = fct_relevel(Variable, "lagHour","lag2Hours","lag3Hours",
+                                          "lag4Hours","lag12Hours","lag1day"))
+correlation.lag <-
+  group_by(plotData.lag, Variable) %>%
+    summarize(correlation = round(cor(Value, Trip_Count, use = "complete.obs"), 2)) 
+ggplot(plotData.lag, aes(x = Value, y = Trip_Count)) +
+  geom_point() +
+  facet_wrap(~Variable, scales = "free") +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Rideship trip count as a function of time lags",
+       subtitle="one week in November, 2019",
+       x = "Lag Variable Value", y = "Trip Count") +
+  theme_minimal()
+```
+
+### Spatial Autocorrelation
+
+|    The trips concentrate in the midtown and lower Manhattan island during weekdays. Especially for midtown, there are significant high amount of trips standing out during rush hours. Both upper west and east does not have significant change in trip counts during weekend and weekdays or different time during the day.
+
+```{r fig.height=8,fig.width=12}
+ggplot()+
+  geom_sf(data = nycTracts %>%
+          st_transform(crs=4326))+
+  geom_point(data = dat_census %>% 
+            mutate(hour = hour(starttime),
+                weekend = ifelse(dotw %in% c("Sun", "Sat"), "Weekend", "Weekday"),
+                time_of_day = case_when(hour(interval60) < 7 | hour(interval60) > 18 ~ "Overnight",
+                                 hour(interval60) >= 7 & hour(interval60) < 10 ~ "AM Rush",
+                                 hour(interval60) >= 10 & hour(interval60) < 15 ~ "Mid-Day",
+                                 hour(interval60) >= 15 & hour(interval60) <= 18 ~ "PM Rush"))%>%
+              group_by(start.station.id, start.station.latitude, start.station.longitude, weekend, time_of_day) %>%
+              tally(),
+            aes(x=start.station.longitude, y = start.station.latitude, color = n), 
+            fill = "transparent", alpha = 0.7, size = 1)+
+  scale_colour_viridis(direction = -1,
+  discrete = FALSE, option = "D")+
+  ylim(min(dat_census$start.station.latitude), max(dat_census$start.station.latitude))+
+  xlim(min(dat_census$start.station.longitude), max(dat_census$start.station.longitude))+
+  facet_grid(weekend ~ time_of_day)+
+  labs(title="Bike share trips per hr by station. NYC, Nov., 2019")+
+  mapTheme
+```
+
+### Weather
+
+|    Precipitation reduces the bike trips that people generates, the graph below indicates that the mean trip counts halved during time with either rain or snow. 
+
+```{r}
+st_drop_geometry(ride.panel) %>%
+  filter(is.na(Precipitation) == FALSE)%>%
+  group_by(interval60) %>% 
+  summarize(Trip_Count = mean(Trip_Count),
+            Precipitation = first(Precipitation)) %>%
+  mutate(isPercip = ifelse(Precipitation > 0,"Rain/Snow", "None")) %>%
+  group_by(isPercip) %>%
+  summarize(Mean_Trip_Count = mean(Trip_Count)) %>%
+    ggplot(aes(isPercip, Mean_Trip_Count)) + geom_bar(stat = "identity") +
+      labs(title="Does ridership vary with precipitation?",
+           x="Precipitation", y="Mean Trip Count")+plotTheme 
+```
+
+|    Temperature affects ridership counts as well, people tends to bike more when the temperature is warmer, cold temperature has significantly lower trip counts. This might also because the time for the coldest time is usually during night, when the trip count is generally low.
+
+```{r message=FALSE, warning=FALSE}
+st_drop_geometry(ride.panel) %>%
+  group_by(interval60) %>% 
+  summarize(Trip_Count = mean(Trip_Count),
+            Temperature = first(Temperature)) %>%
+  mutate(week = week(interval60)) %>%
+  ggplot(aes(Temperature, Trip_Count)) + 
+    geom_point() + geom_smooth(method = "lm", se= FALSE) +
+    facet_wrap(~week, ncol=8) + 
+    labs(title="Trip Count as a fuction of Temperature by week",
+         x="Temperature", y="Mean Trip Count")+theme_minimal()
+```
+
+## Modeling
+
+### Regressions
+
+|    reg1 focuses on just time, including hour fixed effects, day of the week, and Temperature. reg2 focuses on just space effects with the Origin.Tract fixed effects. reg3 includes both time and space fixed effects. reg4 adds the time lag features.
+
+```{r}
+reg1 <- lm(Trip_Count ~  hour(interval60) + dotw + Temperature, data=ride.Train)
+
+reg2 <- lm(Trip_Count ~  Origin.Tract + dotw + Temperature, data=ride.Train)
+
+reg3 <- lm(Trip_Count ~  Origin.Tract + hour(interval60) + dotw + Temperature, 
+                         data=ride.Train)
+
+reg4 <- lm(Trip_Count ~  Origin.Tract +  hour(interval60) + dotw + Temperature +
+                         lagHour + lag2Hours + lag3Hours + lag12Hours + lag1day, 
+                         data=ride.Train)
+```
+
+### Validate test set by time
+
+|   The Mean Absolute Error (MAE) is computed on ride.Test for each model. MAE measures the average absolute errors between predicted and observed values. ride.Test encompasses 2 weeks and is notably impacted by the Thanksgiving holiday. To assess whether the models exhibit generalizability to both holiday and non-holiday weeks, ride.Test.weekNest organizes ride.Test by week. 'Unnest' function can extracts the simple features data for one week from the nested table.
+
+```{r message=FALSE, warning=FALSE}
+ride.Test<-ride.Test%>% filter(!is.na(geometry))
+ride.Test.weekNest <- 
+  as.data.frame(ride.Test) %>%
+  nest(-week) 
+
+ride.Test.weekNest
+```
+```{r}
+model_pred <- function(dat, fit){
+   pred <- predict(fit, newdata = dat)}
+```
+
+```{r}
+week_predictions <- 
+  ride.Test.weekNest %>% 
+    mutate(A_Time_FE = map(.x = data, fit = reg1, .f = model_pred),
+           B_Space_FE = map(.x = data, fit = reg2, .f = model_pred),
+           C_Space_Time_FE = map(.x = data, fit = reg3, .f = model_pred),
+           D_Space_Time_Lags = map(.x = data, fit = reg4, .f = model_pred))
+
+week_predictions 
+```
+
+```{r}
+week_predictions <- week_predictions %>% 
+    gather(Regression, Prediction, -data, -week) %>%
+    mutate(Observed = map(data, pull, Trip_Count),
+           Absolute_Error = map2(Observed, Prediction,  ~ abs(.x - .y)),
+           MAE = map_dbl(Absolute_Error, mean, na.rm = TRUE),
+           sd_AE = map_dbl(Absolute_Error, sd, na.rm = TRUE))
+```
+
+|    The MAE for regressions only accounting time, space, and both time and space are all above 3. The MAE for regression of time is the highest. Adding lags can reduce the MAE and improve the accuracy of prediction. The MAE incorporating lags drop to around 2.
+
+```{r message=FALSE, warning=FALSE,echo=TRUE,results='hide'}
+week_predictions %>%
+  dplyr::select(week, Regression, MAE) %>%
+  gather(Variable, MAE, -Regression, -week) %>%
+  ggplot(aes(week, MAE)) + 
+    geom_bar(aes(fill = Regression), position = "dodge", stat="identity") +
+    scale_fill_manual(values = palette5) +
+    scale_x_continuous(breaks = seq(47,48, by = 1))
+    labs(title = "Mean Absolute Errors by model specification and week") +
+  plotTheme
+```
+|   The plot below indicating the regression incorporating lags has the best accuracy in prediction. The rest regressions all does not do well in predicting the peaks of ridership. The gaps in the plot is due to NA data.
+
+```{r message=FALSE, warning=FALSE}
+week_predictions %>% 
+  mutate(interval60 = map(data, pull, interval60),
+         Origin.Tract = map(data, pull, Origin.Tract)) %>%
+  dplyr::select(interval60, Origin.Tract, Observed, Prediction, Regression) %>%
+  unnest() %>%
+  gather(Variable, Value, -Regression, -interval60, -Origin.Tract) %>%
+    group_by(Regression, Variable, interval60) %>%
+    summarize(Value = mean(Value)) %>%
+    ggplot(aes(interval60, Value, colour=Variable)) + geom_line(size = 1.1) + 
+      facet_wrap(~Regression, ncol=1) +
+      scale_colour_manual(values = palette2) +
+      labs(title = "Mean Predicted/Observed ride share by hourly interval", 
+           x = "Hour", y= "Rideshare Trips") +
+      plotTheme
+```
+
+### Validation by Space
+
+|    Midtown and Lower Manhattan have higher MAE, especially midtown has significantly higher MAE, upper Manhattan has relatively lower MAE.
+
+```{r message=FALSE, warning=FALSE,echo=TRUE,results='hide'}
+error.byWeek <- 
+  filter(week_predictions, Regression == "D_Space_Time_Lags") %>% 
+  unnest() %>%
+  st_sf%>%
+  dplyr::select(Origin.Tract, Absolute_Error, week,geometry) %>%
+  gather(Variable, Value, -Origin.Tract, -week,-geometry) %>%
+  filter(!is.na(Value))%>%
+  group_by(Variable, Origin.Tract, week) %>%
+  summarize(MAE = mean(Value))
+st_crs(nycTracts)
+
+st_crs(error.byWeek) <- 4326
+ggplot() +
+  geom_sf(data = nycTracts)+
+  geom_sf(data = error.byWeek,aes(color = MAE, geometry = geometry)) + 
+  facet_wrap(~ week) +
+  scale_color_gradient(trans = "reverse") +
+  labs(title = "Mean Absolute Error by station by week",
+       color = "MAE") +
+  mapTheme
+```
+
+|    During the morning rush and evening rush hours, midtown and lower Manhattan again shows a significant higher MAE that the rest areas in any other time. 
+
+```{r fig.height=16, fig.width=8, message=FALSE, warning=FALSE}
+error.byHour <-
+  filter(week_predictions, Regression == "D_Space_Time_Lags") %>% 
+    unnest() %>% 
+    st_sf() %>%
+    dplyr::select(Origin.Tract, Absolute_Error, geometry, interval60,week,dotw) %>%
+    gather(Variable, Value, -interval60, -Origin.Tract,-week, -geometry,-dotw) %>%
+    filter(dotw == "Mon" & week(interval60) == 47,!is.na(Value)) %>%
+    group_by(hour = hour(interval60), Origin.Tract) %>%
+    summarize(MAE = mean(Value)) 
+
+st_crs(error.byHour) <- 4326
+ggplot() +
+  geom_sf(data = nycTracts)+
+  geom_sf(data = error.byHour,aes(color = MAE, geometry = geometry),size=0.5) +
+  facet_wrap(~ hour) +
+  scale_color_gradient(trans = "reverse") +
+  labs(title = "Mean Absolute Error by station by hour",
+       color = "MAE") +
+  mapTheme
+```
+
+### Cross-validation
+
+|    In the linear regression I created, results are calculated from a model consisting of 276,376 samples with 10 predictors. The analysis involves cross-validated resampling using a 100-fold approach, meaning the dataset is divided into 100 subsets, and the model is trained and tested multiple times with different combinations of training and testing subsets.
+|    RMSE measures the average magnitude of the errors between predicted and observed values. For my model, the RMSE is 3.65. Rsquared represents the proportion of the variance in the dependent variable can be explained by the predictors. A value of 0.6455 indicates that the model explains about 64.55% of the variance in the response variable. MAE is 2.15. Lower RMSE and MAE values and a higher R-squared value are generally indicative of better model performance. Regarding all these metrics, I feel my model is relatively accurate and good in fit.
+
+```{r message=FALSE, warning=FALSE}
+library(caret)
+control <- trainControl(method="cv", number=100)
+
+set.seed(999) # for reproducibility
+model_cv <- train(Trip_Count ~ start.station.id + hour(interval60) + dotw + Temperature + Precipitation + lagHour + lag2Hours +lag3Hours +lag12Hours + lag1day, 
+                  data=na.omit(ride.panel),
+                  method="lm",
+                  trControl=control)
+
+# View the results
+print(model_cv)
+```
+
+## Conclusion
+
+|    In conclusion, the algorithm developed for the bike re-balancing plan incorporates spatial information, weather data, and time lag features to enhance the accuracy of predicting bike trip counts. Time lag variables provide additional nuance, capturing demand variations in the hours leading up to and during a specific day, while accounting for disruptions like holidays. The model's effectiveness is achieved through the creation of a ride panel, training on 5 weeks of data, and testing on subsequent weeks. The inclusion of time lag features significantly improves prediction accuracy, as indicated by the MAE. The algorithm exhibits generalizability to both holiday and non-holiday weeks, with lower MAE values for areas like upper Manhattan and improved accuracy during rush hours.
+|    The algorithm incorporates regression models with different specifications. The regression results indicate that including time lag features leads to better predictions. The linear regression model, with cross-validated resampling, demonstrates promising performance, explaining approximately 64.55% of the variance in the response variable. Therefore, the algorithm, including spatial, temporal, and weather features, proves relatively useful for predicting bike trip counts, making it a valuable tool for bike re-balancing strategies.

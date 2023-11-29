@@ -1,0 +1,5 @@
+"0","hex_map <- tm_shape(hex_joined) + tm_fill(fill = ""total_appearances"", style = ""jenks"",n = 7, title = ""World Series Appearances"")+tm_borders(col = 'white')+"
+"0","  tm_layout(frame = FALSE, legend.frame = FALSE)"
+"2","Deprecated tmap v3 code detected. Code translated to v4
+"
+"0","hex_map"

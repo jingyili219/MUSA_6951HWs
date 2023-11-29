@@ -1,0 +1,5 @@
+"0","tm_shape(hennepin_black) + "
+"0","  tm_polygons(fill = ""percent"", fill.scale = tm_scale_intervals(n=5, style = ""jenks"", values = ""gn_bu""))+"
+"0","tm_shape(hennepin_black) +"
+"0","  tm_borders(""white"", lwd = 0.5)"
+"0",""

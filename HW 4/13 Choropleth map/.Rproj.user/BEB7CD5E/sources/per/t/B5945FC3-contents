@@ -1,0 +1,99 @@
+---
+title: "Covid impact on Education"
+author: "Jingyi Li"
+date: "2023-11-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(tidycensus)
+library(sf)
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+```
+
+## Data
+
+```{r cars}
+api_key<-"ab9309f9cc70c0e1895e7166c3ca981c40cf0331"
+tracts20 <-  
+  get_acs(geography = "tract",
+          variables = c("B15003_022E","B25026_001E"), 
+          year=2020, state=11,
+          county=001, geometry=TRUE) %>% 
+  st_transform('EPSG:26985')%>%
+  dplyr::select( -NAME, -moe) %>%
+  spread(key = variable, value = estimate) %>%
+  rename(TotalPop = B25026_001,
+         BachMore=B15003_022)%>%
+  filter(!is.na(TotalPop))%>%
+  mutate(pctBachMore = BachMore / TotalPop)
+
+tracts19 <-  
+  get_acs(geography = "tract",
+          variables = c("B15003_022E", "B25026_001E"), 
+          year=2019, state=11,
+          county=001, geometry=TRUE) %>% 
+  st_transform('EPSG:26985')%>%
+  dplyr::select( -NAME, -moe) %>%
+  spread(key = variable, value = estimate) %>%
+  rename(TotalPop = B25026_001,
+         BachMore=B15003_022)%>%
+  filter(!is.na(TotalPop))%>%
+  mutate(pctBachMore = BachMore / TotalPop)
+
+combined_data <- bind_rows(
+  mutate(tracts19, year = 2019),
+  mutate(tracts20, year = 2020)
+)
+combined_data$pctBachorMore <- as.numeric(as.character(combined_data$pctBachorMore))
+```
+
+## Including Plots
+
+
+```{r pressure, echo=FALSE}
+theme_education <- function() {
+  font <- "Times New Roman"
+  theme_minimal() %+replace%
+    theme(
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.ticks = element_blank(),
+      plot.title = element_text(
+        family = font,
+        size = 20,
+        face = "bold",
+        hjust = 0,
+        vjust = 2,
+        color = "black"),
+      plot.subtitle = element_text(
+        family = font,
+        size = 14,
+        hjust = 0,
+        vjust = 2,
+        color = "black"),
+      plot.caption = element_text(
+        family = font,
+        size = 9,
+        hjust = 1,
+        vjust = -0.5),
+      axis.text = element_blank(),
+      axis.text.x = element_blank(),
+      axis.text.y = element_blank(),
+      axis.title = element_blank()
+    )}
+education <- combined_plot <- ggplot(combined_data, aes(fill = pctBachMore)) +
+  geom_sf(color = "white", size = 0.2) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue", na.value = "grey50") +
+  facet_wrap(year ~ .,ncol = 5) +
+  labs(title = "Percentage of Population with Bachelor's Degree or More",
+       subtitle= "Does Covid-19 impact people on getting their Bachelor degrees?",
+       caption = "Source: American Community Survey")+
+  theme_education()
+education
+ggsave("education.png", education, width = 12, height = 8, dpi = 300)
+```
+

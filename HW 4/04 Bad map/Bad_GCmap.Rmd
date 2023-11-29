@@ -1,0 +1,46 @@
+---
+title: "Bad map"
+author: "Jingyi Li"
+date: "2023-11-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(sf)
+library(ggplot2)
+library(mapsf)
+library(grid)
+```
+
+## Data
+
+```{r }
+boundary<-st_read("grca_tracts/GRCA_boundary.shp")
+trail <- st_read("GRCA_TRANS_Trail_ln/GRCA_TRANS_Trail_ln.shp")
+trail <- st_zm(trail, drop = TRUE)
+longestTrail<-trail%>%slice_max(order_by = LengthMile, n = 1)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+grob_explanation <- grobTree(richtext_grob(
+  "<span style='background-color:white'><br>The West Tonto Trail is over 57 miles long. <br>The longest in Grand Canyon National Park.</span>", 
+  x=.35,  y=.9, hjust=0.6, vjust=0.8,gp=gpar(col = "blue", fontsize=11), box_gp = gpar(col = "transparent", fill = "transparent"),padding = margin(.4,0,0,0,"in")))
+ggplot() +
+  geom_sf(data = boundary, fill = NA, color = "orange") +
+  geom_sf(data = trail, color = "green") +
+  geom_sf(data=longestTrail,color="red",linewidth=3)+
+  geom_sf_label(data = longestTrail, aes(label = TrailName), color = "red", size = 4, label.padding = unit(0.2, "lines"))+
+  labs(title = "Chanllenging yourself in Hiking?",
+       subtitle = "Try this trail at Grand Canyon National Park",
+       caption = "Data Source: NPS") +
+  annotation_custom(grob_explanation)+
+  theme_minimal()
+  
+  ggsave("grand_canyon_bad_map.jpeg", width = 10, height = 8)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

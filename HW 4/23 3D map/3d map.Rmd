@@ -1,0 +1,52 @@
+---
+title: "Untitled"
+author: "Jingyi Li"
+date: "2023-11-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(sf)
+library(tmap)
+library(dplyr)
+library(mapsf)
+library(ggplot2)
+```
+
+## Data
+
+```{r cars}
+parking<-read.csv("Grand_Teton_National_Park_Parking.csv")%>%
+    st_as_sf(coords = c("X", "Y"), crs = 4326)%>%
+  filter(POINAME!="Parking")%>%
+  rename(Name=POINAME)
+national_park<-st_read("grand_teton_tracts/GRTE_boundary.shp")%>% st_set_crs(4326)
+```
+
+## Plot
+
+
+
+```{r pressure, echo=FALSE}
+
+mf_shadow(national_park)
+mf_map(national_park, add = TRUE)
+# plot parkings
+mf_layout(scale=FALSE,
+          arrow=TRUE,
+  title = "Viewpoint Parking  in Grand Teton National Park",
+  credits = paste0(
+    "Sources: ArcGIS Open Data\n",
+    "mapsf ",
+    packageVersion("mapsf")))
+mf_map(
+  x = parking,
+  var = "Name",
+  type = "typo",
+  alpha= 0.6,
+  add=TRUE)
+
+```
+
+
+
