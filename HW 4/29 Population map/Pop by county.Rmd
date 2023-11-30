@@ -26,9 +26,9 @@ AZtracts20 <-
   spread(key = variable, value = estimate) %>%
   rename(TotalPop = B25026_001)
 area<-read.csv("county-area.csv")
+AZpop<-merge(AZtracts20,arizonaCounty,by="GEOID")
 AZpop$TotalPop <- as.numeric(AZpop$TotalPop)
 area$Area.Sq.mi. <- as.numeric(area$Area.Sq.mi.)
-AZpop<-merge(AZtracts20,arizonaCounty,by="GEOID")
 popdensity<-merge(AZpop,area,by="NAME")%>%
   mutate(Popdensity=TotalPop/Area.Sq.mi.)
 ```
@@ -75,7 +75,7 @@ theme(
 pop<-ggplot(popdensity) +
   geom_sf(aes(fill = (Popdensity))) +
   scale_fill_gradient(name = "Popdensity",low = "lightyellow", high = "darkgreen") +
-  labs(title = "Population by Counties in Arizona", subtitle = "Maricopa has exceedingly high population density", caption="Source:ArcGIS Open Data\n American Census Bureau") +
+  labs(title = "Population Density by Counties in Arizona", subtitle = "Maricopa has exceedingly high population density(pop/sqmi)", caption="Source:ArcGIS Open Data\n American Census Bureau") +
   geom_sf_text(aes(label = NAME), color = "black", size = 2, check_overlap = TRUE)+
   theme_pop()
 ggsave("population map.jpg",pop,width=12,height=9)
